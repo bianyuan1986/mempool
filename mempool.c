@@ -53,6 +53,15 @@ struct BlockHeader
 	unsigned char data[0];
 };
 
+#ifdef MEMPOOL_HEADER
+struct ObjectHeader
+{
+	unsigned int nextFree;
+	struct Mempool *pool;
+};
+#endif
+
+
 static __attribute__((unused))int round_up(unsigned int size)
 {
 	unsigned int log2x = 0;
@@ -92,7 +101,7 @@ static __attribute__((unused))int round_up(unsigned int size)
 		size >>= 1;
 	}
 
-	return 2<<log2x;
+	return 2^(log2x+1);
 }
 
 static void mempool_free_internal(struct Mempool *mp)
@@ -162,7 +171,11 @@ static int mempool_put_object_internal(struct Mempool *mp, void *obj)
 	struct BlockHeader *block = NULL;
 	int idx = 0;
 
+#ifdef MEMPOOL_HEADER
+	struct ObjectHeader *objHdr = (struct ObjectHeader*)obj;
+#else
 	obj = (unsigned char*)obj-mp->headerSize;
+#endif
 	block = mp->block;
 	while( block )
 	{
@@ -178,7 +191,11 @@ static int mempool_put_object_internal(struct Mempool *mp, void *obj)
 		printf("Put object back to mempool failed! Exception occured!\n");
 		return -1;
 	}
+#ifdef MEMPOOL_HEADER
+	objHdr->nextFree = block->firstFree;
+#else
 	*(int*)obj = block->firstFree;
+#endif
 	idx = ((unsigned char*)obj - block->data)/mp->objectSize;
 	block->firstFree = idx;
 	block->free++;
@@ -215,9 +232,19 @@ static int mempool_create_memblock(struct Mempool *mp, unsigned int objSize, uns
 	for( ; i < block->free; i++)
 	{
 		addr = block->data+i*mp->objectSize;
+#ifdef MEMPOOL_HEADER
+		struct ObjectHeader *objHdr = (struct ObjectHeader*)addr;
+		objHdr->nextFree = i+1;
+		objHdr->pool = mp;
+#else
 		*(int*)addr = i+1;
+#endif
 	}
+#ifdef MEMPOOL_HEADER
+	((struct ObjectHeader*)addr)->nextFree = MAGIC_END;
+#else
 	*(int*)addr = MAGIC_END;
+#endif
 
 	mp->totalSize += totalSize;
 	mp->currentElementCount += elementCount;
@@ -249,7 +276,7 @@ struct Mempool *mempool_create(unsigned int elementSize, unsigned int maxElement
 	struct Mempool *mp = NULL;
 	int ret = 0;
 
-	mp = (struct Mempool*)malloc(sizeof(struct Mempool));
+	mp = (struct Mempool*)mallocPtr(sizeof(struct Mempool));
 	if( !mp )
 	{
 		goto FAILED;
@@ -276,7 +303,8 @@ struct Mempool *mempool_create(unsigned int elementSize, unsigned int maxElement
 
 	mp->maxElementCount = maxElementCount;
 	mp->elementSize = elementSize;
-#ifdef MEMPOOL_DEBUG
+#ifdef MEMPOOL_HEADER
+	mp->headerSize = sizeof(struct ObjectHeader);
 	mp->headerSize = ALIGN_ROUND_UP(mp->headerSize, 8);
 	mp->trailerSize = ALIGN_ROUND_UP(mp->trailerSize, 8);
 #endif
@@ -304,16 +332,39 @@ FAILED:
 
 void *mempool_get_object(struct Mempool *mp)
 {
+	if( !mp )
+	{
+		return NULL;
+	}
+
 	return mp->ops.getObject(mp);
 }
 
 int mempool_put_object(struct Mempool *mp, void *obj)
 {
+#ifdef MEMPOOL_HEADER
+	if( !obj )
+	{
+		return -1;
+	}
+	struct ObjectHeader *objHdr = (struct ObjectHeader*)((unsigned char*)obj-mp->headerSize);
+	return mp->ops.putObject(objHdr->pool, (void*)objHdr);
+#else
+	if( !mp || !obj )
+	{
+		return -1;
+	}
 	return mp->ops.putObject(mp, obj);
+#endif
 }
 
 void mempool_free(struct Mempool *mp)
 {
+	if( !mp )
+	{
+		return;
+	}
+
 	return mp->ops.mempoolFree(mp);
 }
 
@@ -321,6 +372,11 @@ void mempool_release_unused(struct Mempool *mp)
 {
 	struct BlockHeader *block = NULL;
 	struct BlockHeader *prev = NULL;
+
+	if( !mp )
+	{
+		return;
+	}
 
 	block = mp->block;
 	prev = mp->block;
