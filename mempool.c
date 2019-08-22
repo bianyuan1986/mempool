@@ -53,19 +53,65 @@ struct BlockHeader
 	unsigned char data[0];
 };
 
-static int round_up(int size)
+static int round_up(unsigned int size)
 {
-	return size;
+	log2x = 0;
+
+	if( size == 0 )
+	{
+		return 0;
+	}
+
+	if( size & 0xFFFF0000 )
+	{
+		log2x += 16;
+		size >>= 16;
+	}
+
+	if( size & 0xFF00 )
+	{
+		log2x += 8;
+		size >>= 8;
+	}
+
+	if( size & 0xF0 )
+	{
+		log2x += 4;
+		size >>= 4;
+	}
+
+	if( size & 0xC )
+	{
+		log2x += 2;
+		size >>= 2;
+	}
+
+	if( size & 0x2 )
+	{
+		log2x += 1;
+		size >>= 1;
+	}
+
+	return 2^(log2x+1);
 }
 
 static void mempool_free_internal(struct Mempool *mp)
 {
 	struct BlockHeader *block = NULL;
+	struct BlockHeader *prev = NULL;
 
 	block = mp->block;
 	while( block )
 	{
+		prev = block;
 		block = block->next;
+		if( prev->free * mp->objectSize < prev->dataSize )
+		{
+			printf("Can't free mempool. It's still in use!\n");
+			mp->block = prev;
+			return;
+		}
+		mp->ops.freePtr(prev);
 	}
 }
 
@@ -253,7 +299,7 @@ struct Mempool *mempool_create(unsigned int elementSize, unsigned int maxElement
 FAILED:
 	if( mp )
 	{
-		mempool_free(mp);
+		mp->ops.mempoolFree(mp);
 	}
 	return NULL;
 }
@@ -268,7 +314,7 @@ int mempool_put_object(struct Mempool *mp, void *obj)
 	return mp->ops.putObject(mp, obj);
 }
 
-void mempool_free(__attribute__((unused))struct Mempool *mp)
+void mempool_free(Mempool *mp)
 {
 	return mp->ops.mempoolFree(mp);
 }
