@@ -16,6 +16,16 @@
  *  Malloc Object Consume 54707us
  *  Free Object Consume 23737us
  *  ---------------------------------------------------------
+ *
+ *  The get and put operation to the mempool is not thread-safe. The mempool can use heap memory or shared memory.
+ *  To use shared memory, user need to pass the self-defined malloc and free function pointer when create mempool.
+ *
+ *  Use scene:
+ *  1、Each process create a mempool and malloc or free object from the mempool belong to the process. In this situation, the object
+ *     of the mempool has no extra header to save information about which mempool this object belong to. It can save memory.
+ *  2、Each process create a mempool, and one process malloc object from the mempool, another process may
+ *     free the object. To support this, the object of the mempool has an extra header to save information about mempool. User should
+ *     open the -DMEMPOOL_HEADER flag when compile the source code of the mempool.
  */
 
 #ifndef _MEMPOOL_H_
