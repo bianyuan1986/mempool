@@ -92,7 +92,7 @@ static int round_up(unsigned int size)
 		size >>= 1;
 	}
 
-	return 2^(log2x+1);
+	return 2<<log2x;
 }
 
 static void mempool_free_internal(struct Mempool *mp)
