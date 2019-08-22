@@ -53,7 +53,7 @@ struct BlockHeader
 	unsigned char data[0];
 };
 
-static int round_up(unsigned int size)
+static __attribute__((unused))int round_up(unsigned int size)
 {
 	unsigned int log2x = 0;
 
@@ -273,8 +273,6 @@ struct Mempool *mempool_create(unsigned int elementSize, unsigned int maxElement
 	{
 		mp->ops.freePtr = free;
 	}
-
-	maxElementCount = round_up(maxElementCount);
 
 	mp->maxElementCount = maxElementCount;
 	mp->elementSize = elementSize;
