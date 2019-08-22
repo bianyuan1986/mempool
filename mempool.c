@@ -55,7 +55,7 @@ struct BlockHeader
 
 static int round_up(unsigned int size)
 {
-	log2x = 0;
+	unsigned int log2x = 0;
 
 	if( size == 0 )
 	{
@@ -314,7 +314,7 @@ int mempool_put_object(struct Mempool *mp, void *obj)
 	return mp->ops.putObject(mp, obj);
 }
 
-void mempool_free(Mempool *mp)
+void mempool_free(struct Mempool *mp)
 {
 	return mp->ops.mempoolFree(mp);
 }

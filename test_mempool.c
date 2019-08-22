@@ -20,7 +20,7 @@
 #define MEMPOOL_SIZE 1000000
 
 #ifdef DPDK_TEST
-static __attribute__((unused))void *rte_malloc_wrap(int size)
+static __attribute__((unused))void *rte_malloc_wrap(size_t size)
 {
 	void *addr = NULL;
 
