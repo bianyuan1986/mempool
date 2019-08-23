@@ -37,6 +37,7 @@ struct Mempool
 	unsigned int headerSize;
 	unsigned int trailerSize;
 	unsigned int objectSize;
+	unsigned int log2xSize;
 
 	struct MempoolOps ops;
 };
@@ -50,6 +51,7 @@ struct BlockHeader
 	unsigned int elementCount;
 	unsigned int dataSize;
 	unsigned long long addrBoundry;
+	unsigned char pad[32];
 	unsigned char data[0];
 };
 
@@ -101,7 +103,7 @@ static __attribute__((unused))int round_up(unsigned int size)
 		size >>= 1;
 	}
 
-	return 2<<log2x;
+	return log2x;
 }
 
 static void mempool_free_internal(struct Mempool *mp)
@@ -153,7 +155,7 @@ static void *mempool_get_object_internal(struct Mempool *mp)
 		printf("Exception occured!\n");
 		return NULL;
 	}
-	obj = block->data + block->firstFree * mp->objectSize;
+	obj = block->data + (block->firstFree << mp->log2xSize);
 	block->firstFree = *(unsigned int*)obj;
 	block->free--;
 	if( block->free > 0 && (block != mp->block) )
@@ -186,7 +188,7 @@ static int mempool_put_object_internal(struct Mempool *mp, void *obj)
 		block = block->next;
 	}
 
-	if( !block || (((unsigned char*)obj - block->data) % mp->objectSize != 0) )
+	if( !block || ( (((unsigned char*)obj - block->data) & (mp->objectSize-1)) != 0) )
 	{
 		printf("Put object back to mempool failed! Exception occured!\n");
 		return -1;
@@ -196,7 +198,7 @@ static int mempool_put_object_internal(struct Mempool *mp, void *obj)
 #else
 	*(int*)obj = block->firstFree;
 #endif
-	idx = ((unsigned char*)obj - block->data)/mp->objectSize;
+	idx = ((unsigned char*)obj - block->data)>>mp->log2xSize;
 	block->firstFree = idx;
 	block->free++;
 
@@ -262,6 +264,15 @@ static int mempool_init(struct Mempool *mp)
 
 	mp->elementSize = ALIGN_ROUND_UP(mp->elementSize, 8);
 	mp->objectSize = mp->headerSize+mp->elementSize+mp->trailerSize;
+	if( (mp->objectSize & (mp->objectSize-1)) != 0 )
+	{
+		mp->log2xSize = round_up(mp->objectSize)+1;
+		mp->objectSize = 1<<mp->log2xSize; 
+	}
+	else
+	{
+		mp->log2xSize = round_up(mp->objectSize);
+	}
 	ret = mp->ops.createMemblock(mp, mp->objectSize, mp->initElementCount);
 	if( ret < 0 )
 	{
@@ -276,30 +287,22 @@ struct Mempool *mempool_create(unsigned int elementSize, unsigned int maxElement
 	struct Mempool *mp = NULL;
 	int ret = 0;
 
-	mp = (struct Mempool*)mallocPtr(sizeof(struct Mempool));
+	if( mallocPtr )
+	{
+		mp = (struct Mempool*)mallocPtr(sizeof(struct Mempool));
+	}
+	else
+	{
+		mp = (struct Mempool*)malloc(sizeof(struct Mempool));
+	}
 	if( !mp )
 	{
 		goto FAILED;
 	}
 	memset(mp, 0x00, sizeof(struct Mempool));
 
-	if( mallocPtr )
-	{
-		mp->ops.mallocPtr = mallocPtr;
-	}
-	else
-	{
-		mp->ops.mallocPtr = malloc;
-	}
-
-	if( freePtr )
-	{
-		mp->ops.freePtr = freePtr;
-	}
-	else
-	{
-		mp->ops.freePtr = free;
-	}
+	mp->ops.mallocPtr = mallocPtr?mallocPtr:malloc;
+	mp->ops.freePtr = freePtr?freePtr:free;
 
 	mp->maxElementCount = maxElementCount;
 	mp->elementSize = elementSize;

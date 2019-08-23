@@ -2,6 +2,8 @@
  *  Author: baohuren
  *  Email: baohuren@tencent.com
  *  Data: 2019-8-21
+ *
+ *
  *  This file implement a simple memory pool algorithm to manage a bulk of small object with same size.
  *  The malloc operation is fast and the free operation is a bit of slow. Compared to DPDK mempool and system
  *  malloc, the malloc operation of this mempool is faster than DPDK and system malloc. Allocate object and
@@ -17,6 +19,7 @@
  *  Free Object Consume 23737us
  *  ---------------------------------------------------------
  *
+ *
  *  The get and put operation to the mempool is not thread-safe. The mempool can use heap memory or shared memory.
  *  To use shared memory, user need to pass the self-defined malloc and free function pointer when create mempool.
  *
@@ -30,6 +33,10 @@
 
 #ifndef _MEMPOOL_H_
 #define _MEMPOOL_H_
+
+#ifdef __cplusplus__
+extern "C" {
+#endif
 
 struct Mempool;
 
@@ -94,5 +101,9 @@ void mempool_free(struct Mempool *mp);
  * @return
  */
 void mempool_release_unused(struct Mempool *mp);
+
+#ifdef __cplusplus__
+}
+#endif
 
 #endif

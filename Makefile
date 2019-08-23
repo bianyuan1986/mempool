@@ -45,7 +45,7 @@ APP = test_mempool
 # all source are stored in SRCS-y
 SRCS-y := mempool.c test_mempool.c
 
-CFLAGS += -O3 -DDPDK_TEST
+CFLAGS += -O3 -DDPDK_TEST -DMEMPOOL_HEADER
 CFLAGS += $(WERROR_FLAGS) -g
 
 include $(RTE_SDK)/mk/rte.extapp.mk
